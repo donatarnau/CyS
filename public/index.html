@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secure Media — Fase 1 (Node)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Secure Media — Fase 1 (Node)</h1>
+    <p>Cifrado AES-128-GCM por archivo + claves envueltas con RSA/OAEP-SHA256.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>1) Inicializar claves</h2>
+      <form id="initForm">
+        <label>Contraseña para la clave privada</label>
+        <input type="password" id="password" required>
+        <button type="submit">Generar</button>
+        <span id="initMsg" class="msg"></span>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>2) Cifrar archivo</h2>
+      <form id="encryptForm" enctype="multipart/form-data">
+        <input type="file" id="file" name="file" required>
+        <button type="submit">Cifrar</button>
+        <span id="encMsg" class="msg"></span>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>3) Archivos cifrados</h2>
+      <button id="refresh">Actualizar lista</button>
+      <ul id="list"></ul>
+    </section>
+
+    <section class="card">
+      <h2>4) Descifrar</h2>
+      <form id="decryptForm">
+        <label>Ruta completa (encrypted/...)</label>
+        <input type="text" id="encPath" placeholder="encrypted/archivo.ext.enc" required>
+        <label>Contraseña</label>
+        <input type="password" id="decPassword" required>
+        <button type="submit">Descifrar</button>
+        <span id="decMsg" class="msg"></span>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    <small>Proyecto docente — Fase 1</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

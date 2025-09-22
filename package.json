@@ -1,0 +1,24 @@
+{
+  "name": "secure-media-node-phase1",
+  "version": "1.0.0",
+  "description": "Fase 1: servicio de cifrado de contenidos multimedia en Node.js con AES-128-GCM + RSA-OAEP y frontend HTML/JS para pruebas.",
+  "type": "module",
+  "main": "src/server.js",
+  "bin": {
+    "smtool": "src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "init-keys": "node src/cli.js init",
+    "encrypt": "node src/cli.js encrypt",
+    "decrypt": "node src/cli.js decrypt",
+    "list": "node src/cli.js list"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "sqlite3": "^5.1.7"
+  }
+}
