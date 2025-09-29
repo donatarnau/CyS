@@ -13,33 +13,38 @@
   </header>
 
   <main>
+    <!-- Paso 1: Cifrar -->
     <section class="card">
-      <h2>1) Inicializar claves</h2>
-      <form id="initForm">
-        <label>Contraseña para la clave privada</label>
-        <input type="password" id="password" required>
-        <button type="submit">Generar</button>
-        <span id="initMsg" class="msg"></span>
-      </form>
-    </section>
-
-    <section class="card">
-      <h2>2) Cifrar archivo</h2>
+      <h2>1) Cifrar archivo</h2>
       <form id="encryptForm" enctype="multipart/form-data">
         <input type="file" id="file" name="file" required>
-        <button type="submit">Cifrar</button>
+        <button type="button" id="openPopup">Cifrar</button>
         <span id="encMsg" class="msg"></span>
       </form>
     </section>
 
+    <!-- Popup para contraseña -->
+    <div id="passwordPopup" class="popup" style="display:none;">
+      <div class="popup-content">
+        <button type="button" id="closePopup" class="close-btn">X</button>
+        <h3>Introduce tu contraseña</h3>
+        <form id="passwordForm">
+          <input type="password" id="popupPassword" required placeholder="Contraseña">
+          <button type="submit">Confirmar</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Paso 2: Archivos cifrados -->
     <section class="card">
-      <h2>3) Archivos cifrados</h2>
+      <h2>2) Archivos cifrados</h2>
       <button id="refresh">Actualizar lista</button>
       <ul id="list"></ul>
     </section>
 
+    <!-- Paso 3: Descifrar -->
     <section class="card">
-      <h2>4) Descifrar</h2>
+      <h2>3) Descifrar</h2>
       <form id="decryptForm">
         <label>Ruta completa (encrypted/...)</label>
         <input type="text" id="encPath" placeholder="encrypted/archivo.ext.enc" required>
