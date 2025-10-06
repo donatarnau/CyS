@@ -67,6 +67,18 @@ button {
   transition: background 0.2s ease;
 }
 
+.btn {
+  background: var(--accent);
+  color: #041418;
+  border: none;
+  padding: .6rem 1rem;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+  transition: background 0.2s ease; 
+}
+
 button:hover {
   background: #1bc9e3;
 }

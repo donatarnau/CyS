@@ -35,6 +35,15 @@ const upload = multer({ storage });
 // --- Static frontend ---
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+app.use(
+  '/encrypted',
+  express.static(OUT_ENC, {
+    dotfiles: 'deny',
+    fallthrough: false,
+    maxAge: '1h'
+  })
+);
+
 // --- API ---
 
 // Init keys
@@ -53,15 +62,26 @@ app.post('/api/init', async (req, res) => {
 });
 
 // Encrypt upload
+app.get('/api/download/:name', (req, res) => {
+  const safe = path.basename(req.params.name); // evita path traversal
+  const file = path.join(OUT_ENC, safe);
+  if (!fs.existsSync(file)) {
+    return res.status(404).json({ ok: false, error: 'No encontrado' });
+  }
+  res.download(file, safe);
+});
+  
 app.post('/api/encrypt', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'file requerido (multipart/form-data)' });
     const pubPem = fs.readFileSync(path.join(KEYS_DIR, 'public_key.pem'), 'utf8');
     const aesKey = cryptoRandom(16);
     const { nonce, ciphertext, tag } = aes128Encrypt(req.file.buffer, aesKey);
+
     const outName = req.file.originalname + '.enc';
     const outPath = path.join(OUT_ENC, outName);
     fs.writeFileSync(outPath, ciphertext);
+
     const wrapped = rsaPublicEncrypt(pubPem, aesKey);
     const db = await openDb(DB_PATH);
     await addFile(db, {
@@ -72,11 +92,19 @@ app.post('/api/encrypt', upload.single('file'), async (req, res) => {
       tag,
       aes_algo: 'AES-128-GCM'
     });
-    return res.json({ ok: true, encryptedPath: outPath, outName });
+
+    return res.json({
+      ok: true,
+      encryptedPath: outPath,
+      outName,
+      url: `/encrypted/${encodeURIComponent(outName)}`,              // URL estática
+      // downloadUrl: `/api/download/${encodeURIComponent(outName)}`, // (opcional) forzar descarga
+    });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
 });
+
 
 // Decrypt
 app.post('/api/decrypt', async (req, res) => {
