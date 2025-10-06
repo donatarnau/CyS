@@ -20,7 +20,7 @@ const passwordForm = document.getElementById('passwordForm');
 const encMsg = document.getElementById('encMsg');
 
 openPopupBtn.addEventListener('click', () => {
-  popup.style.display = 'block';
+  popup.style.display = 'flex';
   encMsg.textContent = ''; // limpiar mensajes previos
 });
 
