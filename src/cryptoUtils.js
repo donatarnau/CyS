@@ -33,20 +33,41 @@ export function generateRsaKeypair(bits = 2048) {
   return { publicKey, privateKey };
 }
 
-export function rsaPublicEncrypt(publicKeyPem, dataBuf) {
-  return crypto.publicEncrypt(
-    { key: publicKeyPem, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
-    dataBuf
-  );
+// cryptoUtils.js - función rsaPublicEncrypt
+export function rsaPublicEncrypt(publicKeyPem, data) {
+  try {
+    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    return crypto.publicEncrypt(
+      {
+        key: publicKeyPem,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256'
+      },
+      buffer
+    );
+  } catch (error) {
+    console.error('Error en rsaPublicEncrypt:', error);
+    throw new Error(`Fallo en cifrado RSA: ${error.message}`);
+  }
 }
 
-export function rsaPrivateDecrypt(privateKeyPem, cipherBuf) {
-  return crypto.privateDecrypt(
-    { key: privateKeyPem, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
-    cipherBuf
-  );
+// cryptoUtils.js - función rsaPrivateDecrypt
+export function rsaPrivateDecrypt(privateKeyPem, encryptedData) {
+  try {
+    const buffer = Buffer.isBuffer(encryptedData) ? encryptedData : Buffer.from(encryptedData, 'base64');
+    return crypto.privateDecrypt(
+      {
+        key: privateKeyPem,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256'
+      },
+      buffer
+    );
+  } catch (error) {
+    console.error('Error en rsaPrivateDecrypt:', error);
+    throw new Error(`Fallo en descifrado RSA: ${error.message}`);
+  }
 }
-
 // -------- Protect private key with AES-128-GCM + PBKDF2 --------
 export function protectPrivateKeyWithPassword(privateKeyPem, password, iters = 200_000) {
   const salt = crypto.randomBytes(16);

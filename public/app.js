@@ -26,37 +26,41 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- refs seguras + guards ---
-  const popup = document.getElementById('passwordPopup');
-  const openPopupBtn = document.getElementById('openPopup');
-  const closePopupBtn = document.getElementById('closePopup');
-  const passwordForm = document.getElementById('passwordForm');
+  const popup = document.getElementById('popup');
+  const openPopup = document.getElementById('cifrar');
+  const closePopup = document.getElementById('closePopup');
+  const passwordCifrar = document.getElementById('passwordCifrar');
+  const decryptForm = document.getElementById('decryptForm');
   const encMsg = document.getElementById('encMsg');
   const downloadBtn = document.getElementById('downloadBtn');
   const fileInput = document.getElementById('file');
 
-  if (!openPopupBtn || !passwordForm) {
+  if (!openPopupCifrar || !passwordCifrar) {
     console.error('No se encontraron elementos del DOM esperados.');
     return;
   }
 
   // --- POPUP ---
-  openPopupBtn.addEventListener('click', () => {
+  openPopup.addEventListener('click', () => {
     try {
-      popup.style.display = 'flex';
+      popupCifrar.style.display = 'flex';
       encMsg.textContent = '';
     } catch (e) { console.error('Error abriendo popup', e); }
   });
 
-  closePopupBtn.addEventListener('click', () => {
+  closePopup.addEventListener('click', () => {
     try {
-      popup.style.display = 'none';
+      popupCifrar.style.display = 'none';
       document.getElementById('popupPassword').value = '';
     } catch (e) { console.error('Error cerrando popup', e); }
   });
 
   // confirmar contraseña y cifrar
-  passwordForm.addEventListener('submit', async (e) => {
+  passwordCifrar.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    openPopup.click();
+
     try {
       const password = document.getElementById('popupPassword').value;
       const f = fileInput.files[0];
@@ -89,13 +93,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // cerrar popup y limpiar
-      popup.style.display = 'none';
+      popupCifrar.style.display = 'none';
       document.getElementById('popupPassword').value = '';
     } catch (err) {
       console.error('Fallo cifrando:', err);
       encMsg.textContent = (err.name === 'AbortError')
         ? '⏱️ Tiempo de espera agotado. ¿Servidor ocupado?'
         : ('❌ Error: ' + (err.message || err));
+    }
+  });
+
+  // --- DESCIFRAR ---
+
+  // Por boton y eso
+
+  /*descifrarArchivo(id){
+
+    // POPUP - SI LA CONTRASEÑA ES BUENA -> LLAMADA A POST DECRYPT
+
+  };*/
+
+  decryptForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+
+    } catch (err) {
+
     }
   });
 
@@ -111,14 +134,15 @@ document.addEventListener('DOMContentLoaded', () => {
       ul.innerHTML = '';
       rows.forEach(r => {
         const li = document.createElement('li');
-        li.textContent = `${r.id} | ${r.original_name} -> ${r.output_path} | ${r.aes_algo} | ${r.created_at} `;
-        const dl = document.createElement('a');
-        const outName = r.output_path.split('/').pop();
-        dl.href = `/encrypted/${encodeURIComponent(outName)}`;
-        dl.textContent = '⬇ Descargar';
-        dl.style.marginLeft = '10px';
-        dl.download = outName;
-        li.appendChild(dl);
+
+        // INNER HTML
+
+        li.innerHTML = `
+          <h2>${r.id}. ${r.original_name}</h2>
+          <p>Cifrado con ${r.aes_algo}</p>
+          <button class="dcr" id="openPopupDescifrar" >Descrifrar</button>
+          <button class="dwl" onclick="" >Descargar</button>
+        `
         ul.appendChild(li);
       });
     } catch (e) {
