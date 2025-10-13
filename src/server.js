@@ -44,6 +44,14 @@ app.use(
   })
 );
 
+app.use(
+  '/decrypted',
+  express.static(OUT_DEC, {
+    dotfiles: 'deny',
+    fallthrough: false,
+    maxAge: '1h'
+  })
+);
 // --- API ---
 
 // Init keys

@@ -186,14 +186,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const downloadLink = document.createElement('a');
 
             // URL del archivo descifrado
-            const dlUrl = decOut.decryptedPath
-                ? decOut.decryptedPath
-                : (decOut.outName ? `/encrypted/${encodeURIComponent(decOut.outName)}` : null);
-
-            if (!dlUrl) {
-                encMsg.textContent += ' (No se encontró archivo para descargar)';
-                return;
-            }
+            const dlUrl = decOut.outName
+                ? `/decrypted/${encodeURIComponent(decOut.outName)}`
+                : null;
 
             downloadLink.href = dlUrl;
             downloadLink.download = decOut.outName || 'archivo.desc';
