@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secure Media — Iniciar Sesión</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Secure Media — Fase 2 (Multiusuario)</h1>
+    <p>Cifrado AES-128-GCM por archivo + claves RSA por usuario.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Iniciar Sesión</h2>
+      <form id="loginForm">
+        <label for="loginUser">Usuario</label>
+        <input type="text" id="loginUser" required>
+        
+        <label for="loginPass">Contraseña</label>
+        <input type="password" id="loginPass" required>
+        
+        <button type="submit">Entrar</button>
+        <span id="loginMsg" class="msg"></span>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Registro de nuevo usuario</h2>
+      <form id="registerForm">
+        <label for="regUser">Usuario</label>
+        <input type="text" id="regUser" required>
+        
+        <label for="regPass">Contraseña (mín. 8 caracteres)</label>
+        <input type="password" id="regPass" minlength="8" required>
+
+        <label for="regPassConf">Confirmar Contraseña</label>
+        <input type="password" id="regPassConf" minlength="8" required>
+        
+        <button type="submit" id="regButton">Registrar</button>
+        <span id="regMsg" class="msg"></span>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    <small>Proyecto docente CYS — Fase 2</small>
+  </footer>
+
+  <script src="login.js" type="module"></script>
+</body>
+</html>

@@ -4,8 +4,20 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import session from 'express-session';
+import connectSqlite from 'connect-sqlite3';
 
-import { openDb, addFile, getByOutput, listAll } from './db.js';
+// Importamos las funciones de DB (Fase 2)
+import {
+  openDb,
+  createUser, getUserByUsername, getUserById,
+  addFile, getFileById, listFilesByOwner,
+  addShare, getShare, listFilesSharedWithUser
+} from './db.js';
+
+// Las utilidades de cripto son reutilizables, ¡perfecto!
 import {
   aes128Encrypt, aes128Decrypt,
   generateRsaKeypair, rsaPublicEncrypt, rsaPrivateDecrypt,
@@ -20,239 +32,395 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
-const KEYS_DIR = path.join(__dirname, '..', 'keys');
+const KEYS_DIR = path.join(__dirname, '..', 'keys'); // Lo mantenemos para la DB
 const OUT_ENC = path.join(__dirname, '..', 'encrypted');
 const OUT_DEC = path.join(__dirname, '..', 'decrypted');
-const DB_PATH = path.join(__dirname, '..', 'keys', 'keys.db');
+const DB_PATH = path.join(__dirname, '..', 'keys', 'keys.db'); // La DB ahora vive aquí
 
+// Asegurar que existen las carpetas
 if (!fs.existsSync(KEYS_DIR)) fs.mkdirSync(KEYS_DIR, { recursive: true });
 if (!fs.existsSync(OUT_ENC)) fs.mkdirSync(OUT_ENC, { recursive: true });
 if (!fs.existsSync(OUT_DEC)) fs.mkdirSync(OUT_DEC, { recursive: true });
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
+const BCRYPT_ROUNDS = 12; // Coste de hashing para bcrypt
 
-// --- Static frontend ---
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// --- Configuración de Sesión (NUEVO) ---
+const SQLiteStore = connectSqlite(session);
 
+app.use(session({
+    store: new SQLiteStore({
+        db: 'sessions.db', // Almacén de sesiones en un archivo SQLite separado
+        dir: path.join(__dirname, '..', 'keys'), // Guardarlo junto a la DB principal
+        table: 'sessions'
+    }),
+    secret: 'un_secreto_muy_fuerte_para_cys', // ¡Cambiar esto en producción!
+    resave: false,
+    saveUninitialized: false, // No crear sesión hasta que el usuario inicie sesión
+    cookie: {
+        secure: false, // Poner a true si usas HTTPS (en producción)
+        httpOnly: true, // El JS del cliente no puede tocar la cookie
+        maxAge: 1000 * 60 * 60 * 24 // 1 día de sesión
+    }
+}));
+
+// --- Middleware de Autenticación (NUEVO) ---
+const isAuthenticated = (req, res, next) => {
+    if (req.session.userId) {
+        next(); // El usuario está autenticado, continuar
+    } else {
+        res.status(401).json({ error: 'No autorizado. Debes iniciar sesión.' });
+    }
+};
+
+
+// --- Frontend Estático ---
+// Servir la app principal (index.html) solo si está autenticado
 app.use(
-  '/encrypted',
-  express.static(OUT_ENC, {
-    dotfiles: 'deny',
-    fallthrough: false,
-    maxAge: '1h'
-  })
-);
-
-app.use(
-  '/decrypted',
-  express.static(OUT_DEC, {
-    dotfiles: 'deny',
-    fallthrough: false,
-    maxAge: '1h'
-  })
-);
-// --- API ---
-
-// Init keys
-
-app.post('/api/init', async (req, res) => {
-    try {
-        const { password } = req.body;
-        if (!password) return res.status(400).json({ error: 'password requerido' });
-        
-        const pubKeyPath = path.join(KEYS_DIR, 'public_key.pem');
-        const privKeyPath = path.join(KEYS_DIR, 'private_key.enc');
-        
-        // ✅ VERIFICAR si las claves ya existen
-        if (fs.existsSync(pubKeyPath) && fs.existsSync(privKeyPath)) {
-            return res.status(400).json({ 
-                ok: false,
-                error: 'Las claves ya existen. No se pueden regenerar.',
-                code: 'KEYS_ALREADY_EXIST'
-            });
+    '/',
+    (req, res, next) => {
+        if (req.path === '/' || req.path === '/index.html') {
+            if (req.session.userId) {
+                next(); // Autenticado, servir index.html
+            } else {
+                res.redirect('/login.html'); // No autenticado, redirigir a login
+            }
+        } else {
+            next(); // Servir otros archivos (css, js, login.html)
         }
-        
+    },
+    express.static(path.join(__dirname, '..', 'public'))
+);
+
+// Servir archivos descifrados (solo para descargas)
+app.use('/decrypted', isAuthenticated, express.static(OUT_DEC));
+// NOTA: '/encrypted' ya no se sirve estáticamente por seguridad.
+// Los archivos se descargarán a través de la API.
+
+
+// ----------------------------
+// --- API de Autenticación ---
+// ----------------------------
+
+app.post('/api/register', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password || password.length < 8) {
+            return res.status(400).json({ error: 'Usuario y contraseña (mín 8 caracteres) requeridos' });
+        }
+
+        const db = await openDb(DB_PATH);
+        const existingUser = await getUserByUsername(db, username);
+        if (existingUser) {
+            return res.status(409).json({ error: 'El nombre de usuario ya existe' });
+        }
+
+        // 1. Hashear la contraseña del usuario
+        const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+        // 2. Generar el par de claves RSA para el usuario
         const { publicKey, privateKey } = generateRsaKeypair(2048);
+
+        // 3. Proteger la clave privada RSA del usuario con SU PROPIA contraseña
+        //    Usamos la misma función de Fase 1, ¡perfecto!
         const blob = protectPrivateKeyWithPassword(privateKey, password);
-        fs.writeFileSync(pubKeyPath, publicKey);
-        fs.writeFileSync(privKeyPath, JSON.stringify(blob, null, 2));
+        const encrypted_private_key_rsa = JSON.stringify(blob);
+
+        // 4. Guardar usuario en la BD
+        const userId = await createUser(db, {
+            username,
+            password_hash,
+            public_key_rsa: publicKey,
+            encrypted_private_key_rsa
+        });
+
+        // 5. Iniciar sesión automáticamente
+        req.session.userId = userId;
+        req.session.username = username;
+
+        res.status(201).json({ ok: true, message: 'Usuario registrado e iniciado sesión', userId });
+    } catch (e) {
+        console.error('Error en /api/register:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+        }
+
+        const db = await openDb(DB_PATH);
+        const user = await getUserByUsername(db, username);
+        if (!user) {
+            return res.status(401).json({ error: 'Credenciales incorrectas' });
+        }
+
+        // 1. Verificar el hash de la contraseña
+        const match = await bcrypt.compare(password, user.password_hash);
+        if (!match) {
+            return res.status(401).json({ error: 'Credenciales incorrectas' });
+        }
+
+        // 2. Iniciar sesión guardando en la sesión
+        req.session.userId = user.id;
+        req.session.username = user.username;
+
+        res.json({ ok: true, message: 'Inicio de sesión correcto' });
+    } catch (e) {
+        console.error('Error en /api/login:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).json({ error: 'No se pudo cerrar sesión' });
+        }
+        res.clearCookie('connect.sid'); // Limpiar la cookie de sesión
+        res.json({ ok: true, message: 'Sesión cerrada' });
+    });
+});
+
+app.get('/api/session', (req, res) => {
+    // Endpoint para que el frontend verifique si hay una sesión activa
+    if (req.session.userId) {
+        res.json({ ok: true, userId: req.session.userId, username: req.session.username });
+    } else {
+        res.json({ ok: false });
+    }
+});
+
+
+// -------------------------
+// --- API de Archivos ---
+// -------------------------
+
+// Endpoint para subir y cifrar un archivo
+app.post('/api/encrypt', isAuthenticated, upload.single('file'), async (req, res) => {
+    try {
+        const { password } = req.body; // El frontend debe enviar la contraseña para verificar al usuario
+        const userId = req.session.userId;
         
-        return res.json({ 
-            ok: true, 
-            message: 'Par RSA generado y clave privada protegida.' 
+        if (!req.file) return res.status(400).json({ error: 'file requerido' });
+        if (!password) return res.status(400).json({ error: 'password requerido para confirmar' });
+
+        const db = await openDb(DB_PATH);
+        
+        // 1. Verificar la contraseña del usuario (como medida de seguridad)
+        const user = await getUserById(db, userId);
+        const userDb = await getUserByUsername(db, user.username); // Necesitamos el hash
+        const match = await bcrypt.compare(password, userDb.password_hash);
+        if (!match) {
+            return res.status(401).json({ error: 'Contraseña incorrecta' });
+        }
+        
+        // 2. Generar clave AES aleatoria para ESTE archivo
+        const aesKey = crypto.randomBytes(16); // 128 bits
+        
+        // 3. Cifrar el archivo con AES-GCM
+        const { nonce, ciphertext, tag } = aes128Encrypt(req.file.buffer, aesKey);
+
+        const outName = `${crypto.randomBytes(16).toString('hex')}-${req.file.originalname}.enc`;
+        const outPath = path.join(OUT_ENC, outName);
+        fs.writeFileSync(outPath, ciphertext); // Guardar archivo cifrado
+
+        // 4. Cifrar la clave AES con la CLAVE PÚBLICA RSA del PROPIETARIO
+        const wrappedKey = rsaPublicEncrypt(user.public_key_rsa, aesKey);
+
+        // 5. Guardar metadatos en la BD
+        await addFile(db, {
+            owner_user_id: userId,
+            original_name: req.file.originalname,
+            output_path: outPath,
+            encrypted_aes_key_for_owner: wrappedKey.toString('base64'),
+            nonce: nonce.toString('base64'),
+            tag: tag.toString('base64'),
+            aes_algo: 'AES-128-GCM'
+        });
+
+        return res.json({
+            ok: true,
+            message: 'Archivo cifrado y guardado',
+            outName: req.file.originalname,
         });
     } catch (e) {
+        console.error('Error en /api/encrypt:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// Endpoint para descifrar un archivo (propio o compartido)
+app.post('/api/decrypt', isAuthenticated, async (req, res) => {
+    try {
+        const { id, password } = req.body; // ID del archivo y contraseña del usuario actual
+        const userId = req.session.userId;
+
+        if (!id || !password) {
+            return res.status(400).json({ error: 'id y password requeridos' });
+        }
+
+        const db = await openDb(DB_PATH);
+        
+        // 1. Obtener los datos del usuario actual (para su clave privada y verificar pass)
+        const user = await getUserById(db, userId);
+        const userDb = await getUserByUsername(db, user.username); // Necesitamos el hash
+        
+        // 2. Verificar la contraseña del usuario
+        const match = await bcrypt.compare(password, userDb.password_hash);
+        if (!match) {
+            return res.status(401).json({ error: 'Contraseña incorrecta' });
+        }
+
+        // 3. Descifrar la CLAVE PRIVADA RSA del usuario (usando su contraseña)
+        const blob = JSON.parse(user.encrypted_private_key_rsa);
+        const userPrivateRsaKey = recoverPrivateKeyFromPassword(blob, password);
+
+        // 4. Obtener los metadatos del archivo
+        const file = await getFileById(db, id);
+        if (!file) {
+            return res.status(404).json({ error: 'Archivo no encontrado' });
+        }
+
+        let encryptedAesKeyB64; // Aquí guardaremos la clave AES cifrada (para el owner o para el recipient)
+
+        // 5. Comprobar permisos: ¿Es el propietario?
+        if (file.owner_user_id === userId) {
+            encryptedAesKeyB64 = file.encrypted_aes_key_for_owner;
+        } else {
+            // 6. Si no es propietario, ¿se lo han compartido?
+            const share = await getShare(db, id, userId);
+            if (share) {
+                encryptedAesKeyB64 = share.encrypted_aes_key_for_recipient;
+            } else {
+                // Si no es dueño Y no está compartido con él, no tiene permisos
+                return res.status(403).json({ error: 'Acceso denegado a este archivo' });
+            }
+        }
+
+        // 7. Descifrar la clave AES del archivo usando la CLAVE PRIVADA RSA del usuario
+        const aesKey = rsaPrivateDecrypt(userPrivateRsaKey, encryptedAesKeyB64);
+        
+        // 8. Leer el archivo cifrado del disco
+        const ct = fs.readFileSync(file.output_path);
+        
+        // 9. Descifrar el archivo con la clave AES
+        const pt = aes128Decrypt(
+            Buffer.from(file.nonce, 'base64'),
+            ct,
+            Buffer.from(file.tag, 'base64'),
+            aesKey
+        );
+
+        // 10. Guardar archivo descifrado temporalmente en /decrypted
+        const outName = file.original_name;
+        const outPath = path.join(OUT_DEC, outName);
+        fs.writeFileSync(outPath, pt);
+
+        // 11. Devolver la ruta para descargar (se sirve desde /decrypted)
+        return res.json({ ok: true, outName });
+
+    } catch (e) {
+        console.error('Error en /api/decrypt:', e);
+        // Capturar error de GCM (contraseña incorrecta -> clave RSA incorrecta -> clave AES incorrecta)
+        if (e.message.includes('unsupported state') || e.message.includes('Fallo en descifrado')) {
+             return res.status(401).json({ error: 'Contraseña incorrecta o datos corruptos' });
+        }
         return res.status(500).json({ error: e.message });
     }
 });
 
-// Encrypt upload
-app.get('/api/download/:name', (req, res) => {
-  const safe = path.basename(req.params.name); // evita path traversal
-  const file = path.join(OUT_ENC, safe);
-  if (!fs.existsSync(file)) {
-    return res.status(404).json({ ok: false, error: 'No encontrado' });
-  }
-  res.download(file, safe);
-});
 
-app.post('/api/encrypt', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'file requerido (multipart/form-data)' });
-    const pubPem = fs.readFileSync(path.join(KEYS_DIR, 'public_key.pem'), 'utf8');
-    const aesKey = cryptoRandom(16);
-    const { nonce, ciphertext, tag } = aes128Encrypt(req.file.buffer, aesKey);
-
-    const outName = req.file.originalname + '.enc';
-    const outPath = path.join(OUT_ENC, outName);
-    fs.writeFileSync(outPath, ciphertext);
-
-    // ✅ Cambio importante: cifrar solo la clave AES (16 bytes)
-    const wrapped = rsaPublicEncrypt(pubPem, aesKey);
-    
-    const db = await openDb(DB_PATH);
-    await addFile(db, {
-      original_name: req.file.originalname,
-      output_path: outPath,
-      rsa_encrypted_key: wrapped.toString('base64'),
-      nonce: nonce.toString('base64'),
-      tag: tag.toString('base64'),
-      aes_algo: 'AES-128-GCM'
-    });
-
-    return res.json({
-      ok: true,
-      encryptedPath: outPath,
-      outName,
-      url: `/encrypted/${encodeURIComponent(outName)}`,
-    });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
-  }
-});
-
-
-// Decrypt
-app.post('/api/decrypt', async (req, res) => {
-  try {
-    const { id, password } = req.body;
-    if (!id || !password) {
-      return res.status(400).json({ error: 'id y password requeridos' });
-    }
-
-    // Leer y descifrar la clave privada RSA
-    const blobPath = path.join(KEYS_DIR, 'private_key.enc');
-    if (!fs.existsSync(blobPath)) {
-      return res.status(404).json({ error: 'No se encontró private_key.enc. Ejecuta /api/init primero.' });
-    }
-    const blob = JSON.parse(fs.readFileSync(blobPath, 'utf8'));
-    const privPem = recoverPrivateKeyFromPassword(blob, password);
-
-    // Abrir DB y buscar el archivo por id
-    const db = await openDb(DB_PATH);
-    const row = await db.get(
-      `SELECT * FROM files WHERE id = ?`,
-      [id]
-    );
-    if (!row) return res.status(404).json({ error: 'No hay metadatos para ese archivo' });
-
-    console.log('Descifrando archivo ID:', id);
-    console.log('Clave RSA cifrada (base64 length):', row.rsa_encrypted_key.length);
-
-    // Descifrar clave AES y luego el archivo
-    const aesKey = rsaPrivateDecrypt(privPem, row.rsa_encrypted_key);
-    console.log('Clave AES descifrada (length):', aesKey.length);
-
-    const ct = fs.readFileSync(row.output_path);
-    const pt = aes128Decrypt(
-      Buffer.from(row.nonce, 'base64'),
-      ct,
-      Buffer.from(row.tag, 'base64'),
-      aesKey
-    );
-
-    // Guardar archivo descifrado en la carpeta decrypted
-    const outName = row.original_name;
-    const outPath = path.join(OUT_DEC, outName);
-    fs.writeFileSync(outPath, pt);
-
-    return res.json({ ok: true, decryptedPath: outPath, outName });
-
-  } catch (e) {
-    console.error('Error descifrando:', e);
-    return res.status(500).json({ error: e.message });
-  }
-});
-
-
-// List
-app.get('/api/list', async (_req, res) => {
-  try {
-    const db = await openDb(DB_PATH);
-    const rows = await listAll(db);
-    return res.json(rows);
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/api/check-keys', (req, res) => {
+// Endpoint para listar MIS archivos
+app.get('/api/my-files', isAuthenticated, async (req, res) => {
     try {
-        const pubKeyPath = path.join(KEYS_DIR, 'public_key.pem');
-        const privKeyPath = path.join(KEYS_DIR, 'private_key.enc');
-        
-        const keysExist = fs.existsSync(pubKeyPath) && fs.existsSync(privKeyPath);
-        
-        return res.json({ 
-            keysExist,
-            publicKeyExists: fs.existsSync(pubKeyPath),
-            privateKeyExists: fs.existsSync(privKeyPath)
-        });
+        const db = await openDb(DB_PATH);
+        const rows = await listFilesByOwner(db, req.session.userId);
+        return res.json(rows);
     } catch (e) {
-        return res.status(500).json({ error: e.message });
+        res.status(500).json({ error: e.message });
     }
 });
 
-// Verificar si una contraseña es correcta para las claves existentes
-app.post('/api/verify-password', (req, res) => {
+// Endpoint para listar archivos compartidos CONMIGO
+app.get('/api/shared-with-me', isAuthenticated, async (req, res) => {
     try {
-        const { password } = req.body;
-        if (!password) {
-            return res.status(400).json({ error: 'password requerido' });
+        const db = await openDb(DB_PATH);
+        const rows = await listFilesSharedWithUser(db, req.session.userId);
+        return res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// Endpoint para COMPARTIR un archivo
+app.post('/api/share', isAuthenticated, async (req, res) => {
+    try {
+        const { fileId, recipientUsername, ownerPassword } = req.body;
+        const ownerUserId = req.session.userId;
+
+        if (!fileId || !recipientUsername || !ownerPassword) {
+            return res.status(400).json({ error: 'fileId, recipientUsername y ownerPassword requeridos' });
         }
 
-        const privKeyPath = path.join(KEYS_DIR, 'private_key.enc');
-        
-        // Verificar que existe la clave privada cifrada
-        if (!fs.existsSync(privKeyPath)) {
-            return res.json({ 
-                ok: false, 
-                error: 'No hay claves existentes. Debes ejecutar /api/init primero.' 
-            });
+        if (recipientUsername === req.session.username) {
+            return res.status(400).json({ error: 'No puedes compartir un archivo contigo mismo' });
         }
 
-        // Intentar descifrar la clave privada con la contraseña proporcionada
-        const blob = JSON.parse(fs.readFileSync(privKeyPath, 'utf8'));
-        const privPem = recoverPrivateKeyFromPassword(blob, password);
+        const db = await openDb(DB_PATH);
+
+        // 1. Verificar la contraseña del propietario (la necesitamos para su clave privada)
+        const ownerUser = await getUserById(db, ownerUserId);
+        const ownerUserDb = await getUserByUsername(db, ownerUser.username);
+        const match = await bcrypt.compare(ownerPassword, ownerUserDb.password_hash);
+        if (!match) {
+            return res.status(401).json({ error: 'Contraseña de propietario incorrecta' });
+        }
+
+        // 2. Obtener la clave privada RSA del PROPIETARIO
+        const ownerBlob = JSON.parse(ownerUser.encrypted_private_key_rsa);
+        const ownerPrivateRsaKey = recoverPrivateKeyFromPassword(ownerBlob, ownerPassword);
+
+        // 3. Obtener los metadatos del archivo y verificar que el usuario es el propietario
+        const file = await getFileById(db, fileId);
+        if (!file || file.owner_user_id !== ownerUserId) {
+            return res.status(403).json({ error: 'No eres el propietario de este archivo' });
+        }
+
+        // 4. Obtener al usuario DESTINATARIO (para su clave pública)
+        const recipientUser = await getUserByUsername(db, recipientUsername);
+        if (!recipientUser) {
+            return res.status(404).json({ error: 'Usuario destinatario no encontrado' });
+        }
         
-        // Si llegamos aquí sin errores, la contraseña es correcta
-        return res.json({ 
-            ok: true, 
-            message: 'Contraseña correcta' 
+        // 5. Descifrar la clave AES del archivo (usando la clave privada del PROPIETARIO)
+        const aesKey = rsaPrivateDecrypt(ownerPrivateRsaKey, file.encrypted_aes_key_for_owner);
+
+        // 6. Cifrar la clave AES con la CLAVE PÚBLICA RSA del DESTINATARIO
+        const encryptedKeyForRecipient = rsaPublicEncrypt(recipientUser.public_key_rsa, aesKey);
+
+        // 7. Guardar el registro de compartición en la BD
+        await addShare(db, {
+            file_id: fileId,
+            owner_user_id: ownerUserId,
+            recipient_user_id: recipientUser.id,
+            encrypted_aes_key_for_recipient: encryptedKeyForRecipient.toString('base64')
         });
-        
+
+        res.json({ ok: true, message: `Archivo compartido con ${recipientUsername}` });
+
     } catch (e) {
-        // Si hay error al descifrar, la contraseña es incorrecta
-        return res.json({ 
-            ok: false, 
-            error: 'Contraseña incorrecta' 
-        });
+        console.error('Error en /api/share:', e);
+        res.status(500).json({ error: e.message });
     }
 });
 
 
-app.listen(PORT, () => console.log(`Secure Media server running at http://localhost:${PORT}`));
-
-import crypto from 'crypto';
-function cryptoRandom(n) { return crypto.randomBytes(n); }
+// --- Iniciar Servidor ---
+app.listen(PORT, () => console.log(`Secure Media (Fase 2) server running at http://localhost:${PORT}`));

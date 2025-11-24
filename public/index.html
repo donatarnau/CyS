@@ -3,50 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Secure Media — Fase 1 (Node)</title>
+  <title>Secure Media — Dashboard</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>Secure Media — Fase 1 (Node)</h1>
-    <p>Cifrado AES-128-GCM por archivo + claves envueltas con RSA/OAEP-SHA256.</p>
+    <h1>Secure Media — Mi Dashboard</h1>
+    <p>Usuario: <strong id="usernameDisplay">...</strong> 
+       <button id="logoutBtn" class="btn-logout">Cerrar Sesión</button>
+    </p>
   </header>
 
   <main>
-    <!-- Paso 1: Cifrar -->
     <section class="card">
-      <h2>1. Cifrar archivo</h2>
+      <h2>1. Cifrar y Subir archivo</h2>
       <form id="encryptForm" enctype="multipart/form-data">
+        <label for="file">Selecciona un archivo multimedia</label>
         <input type="file" id="file" name="file" required>
-        <button type="button" id="cifrar">Cifrar</button>
+        <button type="button" id="cifrarBtn">Cifrar y Subir</button>
         <span id="encMsg" class="msg"></span>
       </form>
     </section>
 
-    <!-- Popup para contraseña -->
-    <div id="popup" class="popup" style="display:none;">
-      <div class="popup-content">
-        <button type="button" id="closePopup" class="close-btn">X</button>
-        <h3>Introduce tu contraseña</h3>
-        <p id="malPass"></p>
-        <form id="popupForm">
-        </form>
-      </div>
-    </div>
-
-    <!-- Paso 2: Archivos cifrados -->
     <section class="card">
-      <h2>2. Archivos cifrados</h2>
-      <button id="refresh">Actualizar lista</button>
-      <ul id="list">
-      </ul>
+      <h2>2. Mis Archivos</h2>
+      <button id="refreshMyFilesBtn">Actualizar lista</button>
+      <ul id="myFilesList">
+        </ul>
     </section>
+
+    <section class="card">
+        <h2>3. Archivos Compartidos Conmigo</h2>
+        <button id="refreshSharedBtn">Actualizar lista</button>
+        <ul id="sharedFilesList">
+          </ul>
+      </section>
   </main>
 
+  <div id="popup" class="popup" style="display:none;">
+    <div class="popup-content">
+      <button type="button" id="closePopup" class="close-btn">X</button>
+      <h3 id="popupTitle">Introduce tu contraseña</h3>
+      <p id="popupMsg" class="msg-error"></p>
+      <form id="popupForm">
+        </form>
+    </div>
+  </div>
+
   <footer>
-    <small>Proyecto docente CYS — Fase 1</small>
+    <small>Proyecto docente CYS — Fase 2</small>
   </footer>
 
-  <script src="app.js"></script>
+  <script src="app.js" type="module"></script>
 </body>
 </html>

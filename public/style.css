@@ -175,3 +175,62 @@ footer {
   border: none;
   cursor: pointer;
 }
+
+/* Añadido para Fase 2 */
+.btn-logout {
+  background: var(--muted);
+  color: var(--bg);
+  border: none;
+  padding: .3rem .6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+  margin-left: 1rem;
+  transition: background 0.2s ease; 
+}
+.btn-logout:hover {
+  background: var(--fg);
+}
+
+.msg-error {
+    color: #f87171; /* Un color de error */
+    font-size: 0.9rem;
+}
+
+/* Estilos para los items de las listas (un poco más de info) */
+li {
+  background: var(--input-bg);
+  padding: .8rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: .9rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+li .file-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+li .file-info span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+li .file-actions {
+  display: flex;
+  gap: .5rem;
+}
+
+li h3 { /* Reemplaza el h2 de Fase 1 */
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

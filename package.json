@@ -16,8 +16,11 @@
     "list": "node src/cli.js list"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "commander": "^12.1.0",
+    "connect-sqlite3": "^0.9.16",
     "express": "^4.19.2",
+    "express-session": "^1.18.2",
     "multer": "^1.4.5-lts.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
