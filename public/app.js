@@ -1,6 +1,6 @@
-// public/app.js (Fase 2)
+// public/app.js
 
-// --- Helpers de API (Reutilizados y mejorados) ---
+// Funciones auxiliares para API
 async function postJSON(url, data, timeoutMs = 30000) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -11,7 +11,7 @@ async function postJSON(url, data, timeoutMs = 30000) {
             body: JSON.stringify(data),
             signal: ctrl.signal
         });
-        return res; // Devolver la respuesta completa para manejar errores
+        return res;
     } finally { clearTimeout(t); }
 }
 
@@ -20,14 +20,14 @@ async function postForm(url, formData, timeoutMs = 300000) {
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
         const res = await fetch(url, { method: 'POST', body: formData, signal: ctrl.signal });
-        return res; // Devolver la respuesta completa
+        return res;
     } finally { clearTimeout(t); }
 }
 
-// --- Estado de la Aplicación ---
+// Estado de la Aplicación
 let currentUser = null;
 
-// --- Elementos del DOM ---
+// Elementos del DOM
 const $ = (id) => document.getElementById(id);
 const fileInput = $('file');
 const encMsg = $('encMsg');
@@ -44,17 +44,17 @@ const myFilesList = $('myFilesList');
 const sharedFilesList = $('sharedFilesList');
 const usernameDisplay = $('usernameDisplay');
 
-// --- Lógica de Popups ---
+// Lógica de Popups
 
 function closePopup() {
     popup.style.display = 'none';
     popupForm.innerHTML = '';
     popupMsg.textContent = '';
-    fileInput.value = ''; // Limpiar input de archivo al cerrar popup
+    fileInput.value = '';
 }
 
 /**
- * Muestra un popup dinámico.
+ * Muestra un popup dinámico
  * @param {'password' | 'share'} type El tipo de popup
  * @param {string} title Título del popup
  * @param {object} context Objeto con datos (ej. { fileId, fileName })
@@ -63,10 +63,9 @@ function closePopup() {
 function mostrarPopup(type, title, context, onSubmit) {
     popupTitle.textContent = title;
     popupMsg.textContent = '';
-    popupForm.innerHTML = ''; // Limpiar formulario
+    popupForm.innerHTML = '';
 
     if (type === 'password') {
-        // Popup para pedir contraseña (para cifrar o descifrar)
         popupForm.innerHTML = `
             <label for="pwd">Contraseña</label>
             <input type="password" id="pwd" required>
@@ -75,18 +74,16 @@ function mostrarPopup(type, title, context, onSubmit) {
     } 
     
     if (type === 'share') {
-        // Popup para compartir
         popupForm.innerHTML = `
             <p>Compartiendo archivo: <strong>${context.fileName}</strong></p>
             <label for="shareUser">Nombre de usuario destinatario</label>
             <input type="text" id="shareUser" required>
-            <label for="pwd">Tu Contraseña (para firmar la compartición)</label>
+            <label for="pwd">Tu Contraseña (para autorizar la compartición)</label>
             <input type="password" id="pwd" required>
             <button type="submit">Compartir</button>
         `;
     }
 
-    // Asignar el manejador de envío
     popupForm.onsubmit = async (e) => {
         e.preventDefault();
         const submitButton = popupForm.querySelector('button[type="submit"]');
@@ -94,21 +91,20 @@ function mostrarPopup(type, title, context, onSubmit) {
         submitButton.textContent = 'Procesando...';
         
         try {
-            await onSubmit(e); // Ejecutar la lógica específica
+            await onSubmit(e);
         } catch (err) {
             popupMsg.textContent = `❌ Error: ${err.message}`;
         } finally {
             submitButton.disabled = false;
-            submitButton.textContent = 'Confirmar'; // O 'Compartir'
+            submitButton.textContent = 'Confirmar';
         }
     };
 
     popup.style.display = 'flex';
-    // Dar foco al primer input
     popup.querySelector('input').focus();
 }
 
-// --- Lógica de Cifrado ---
+// Lógica de Cifrado
 
 async function cifrarArchivo() {
     const f = fileInput.files[0];
@@ -117,7 +113,6 @@ async function cifrarArchivo() {
         return;
     }
 
-    // Pedir contraseña en popup
     mostrarPopup('password', 'Confirmar Contraseña para Cifrar', {}, async () => {
         const password = $('pwd').value;
         if (!password) {
@@ -129,14 +124,14 @@ async function cifrarArchivo() {
         
         const fd = new FormData();
         fd.append('file', f);
-        fd.append('password', password); // Enviamos la contraseña para que el backend verifique
+        fd.append('password', password);
 
         const res = await postForm('/api/encrypt', fd);
         const data = await res.json();
 
         if (res.ok) {
             encMsg.textContent = `✅ Cifrado: ${data.outName}`;
-            await refreshMyFiles(); // Actualizar lista de archivos
+            await refreshMyFiles();
             closePopup();
         } else {
             popupMsg.textContent = `❌ Error: ${data.error}`;
@@ -144,10 +139,9 @@ async function cifrarArchivo() {
     });
 }
 
-// --- Lógica de Descifrado ---
+// Lógica de Descifrado
 
 async function descifrarArchivo(fileId, fileName) {
-    // Pedir contraseña en popup
     mostrarPopup('password', 'Contraseña para Descifrar', {}, async () => {
         const password = $('pwd').value;
         if (!password) {
@@ -161,15 +155,13 @@ async function descifrarArchivo(fileId, fileName) {
         const data = await res.json();
 
         if (res.ok) {
-            // Éxito. 'data.outName' tiene el nombre original.
-            // Creamos un enlace de descarga temporal
             const dlUrl = `/decrypted/${encodeURIComponent(data.outName)}`;
             
             const downloadLink = document.createElement('a');
             downloadLink.href = dlUrl;
             downloadLink.download = data.outName;
             document.body.appendChild(downloadLink);
-            downloadLink.click(); // Iniciar descarga
+            downloadLink.click();
             document.body.removeChild(downloadLink);
 
             closePopup();
@@ -179,7 +171,7 @@ async function descifrarArchivo(fileId, fileName) {
     });
 }
 
-// --- Lógica de Compartir ---
+// Lógica de Compartir
 
 async function compartirArchivo(fileId, fileName) {
     mostrarPopup('share', 'Compartir Archivo', { fileId, fileName }, async () => {
@@ -202,14 +194,14 @@ async function compartirArchivo(fileId, fileName) {
 
         if (res.ok) {
             popupMsg.textContent = `✅ ¡Compartido con ${recipientUsername}!`;
-            setTimeout(closePopup, 1500); // Cerrar tras 1.5s
+            setTimeout(closePopup, 1500);
         } else {
             popupMsg.textContent = `❌ Error: ${data.error}`;
         }
     });
 }
 
-// --- Lógica de Listado de Archivos ---
+// Lógica de Listado de Archivos
 
 async function refreshMyFiles() {
     myFilesList.innerHTML = '<li>Cargando mis archivos...</li>';
@@ -218,7 +210,7 @@ async function refreshMyFiles() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         
         const files = await res.json();
-        myFilesList.innerHTML = ''; // Limpiar
+        myFilesList.innerHTML = '';
 
         if (files.length === 0) {
             myFilesList.innerHTML = '<li>No tienes archivos cifrados.</li>';
@@ -241,7 +233,6 @@ async function refreshMyFiles() {
             myFilesList.appendChild(li);
         });
 
-        // Añadir listeners a los nuevos botones
         myFilesList.querySelectorAll('.btn-download').forEach(btn => {
             btn.addEventListener('click', () => descifrarArchivo(btn.dataset.id, btn.dataset.name));
         });
@@ -261,7 +252,7 @@ async function refreshSharedFiles() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         
         const files = await res.json();
-        sharedFilesList.innerHTML = ''; // Limpiar
+        sharedFilesList.innerHTML = '';
 
         if (files.length === 0) {
             sharedFilesList.innerHTML = '<li>Nadie ha compartido archivos contigo.</li>';
@@ -283,7 +274,6 @@ async function refreshSharedFiles() {
             sharedFilesList.appendChild(li);
         });
 
-        // Añadir listeners a los nuevos botones
         sharedFilesList.querySelectorAll('.btn-download').forEach(btn => {
             btn.addEventListener('click', () => descifrarArchivo(btn.dataset.id, btn.dataset.name));
         });
@@ -294,7 +284,7 @@ async function refreshSharedFiles() {
 }
 
 
-// --- Lógica de Autenticación y Arranque ---
+// Lógica de Autenticación y Arranque
 
 async function checkSession() {
     try {
@@ -303,11 +293,9 @@ async function checkSession() {
         if (data.ok) {
             currentUser = data;
             usernameDisplay.textContent = currentUser.username;
-            // Si la sesión está OK, cargar las listas
             await refreshMyFiles();
             await refreshSharedFiles();
         } else {
-            // No hay sesión, redirigir a login
             window.location.href = '/login.html';
         }
     } catch (e) {
@@ -321,20 +309,17 @@ async function logout() {
     window.location.href = '/login.html';
 }
 
-// --- Inicialización de la App ---
+// Inicialización de la App
 document.addEventListener('DOMContentLoaded', () => {
-    // Asignar listeners
     cifrarBtn.addEventListener('click', cifrarArchivo);
     logoutBtn.addEventListener('click', logout);
     refreshMyFilesBtn.addEventListener('click', refreshMyFiles);
     refreshSharedBtn.addEventListener('click', refreshSharedFiles);
     closePopupBtn.addEventListener('click', closePopup);
     
-    // Permitir cerrar popup haciendo click fuera
     popup.addEventListener('click', e => {
         if (e.target === popup) closePopup();
     });
 
-    // 1. Verificar sesión al cargar la página
     checkSession();
 });

@@ -1,6 +1,6 @@
 // public/login.js
 
-// Helper para POST JSON (copiado de app.js)
+// Helper para POST JSON
 async function postJSON(url, data, timeoutMs = 30000) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -11,7 +11,6 @@ async function postJSON(url, data, timeoutMs = 30000) {
             body: JSON.stringify(data),
             signal: ctrl.signal
         });
-        // Devolvemos la respuesta completa para manejar errores
         return res;
     } finally { clearTimeout(t); }
 }
@@ -23,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const regMsg = document.getElementById('regMsg');
     const regButton = document.getElementById('regButton');
 
-    // --- Manejador de Login ---
+    // Manejador de Login
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         loginMsg.textContent = 'Verificando...';
@@ -36,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (res.ok) {
                 loginMsg.textContent = '¡Éxito! Redirigiendo...';
-                // Redirigir al dashboard (index.html)
                 window.location.href = '/'; 
             } else {
                 loginMsg.textContent = `❌ Error: ${data.error || 'Fallo en el login'}`;
@@ -46,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Manejador de Registro ---
+    // Manejador de Registro
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('regUser').value;
@@ -66,13 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
         regButton.disabled = true;
 
         try {
-            // Aumentamos el timeout para el registro porque generar claves RSA tarda
             const res = await postJSON('/api/register', { username, password }, 60000); 
             const data = await res.json();
 
             if (res.ok) {
                 regMsg.textContent = '¡Éxito! Redirigiendo...';
-                // Redirigir al dashboard (index.html)
                 window.location.href = '/';
             } else {
                 regMsg.textContent = `❌ Error: ${data.error || 'Fallo en el registro'}`;

@@ -54,12 +54,12 @@ function promptHidden(query) {
 
 program
   .name('smtool')
-  .description('Secure Media CLI (Fase 1)')
+  .description('Herramienta CLI para cifrado seguro de archivos multimedia')
   .version('1.0.0');
 
 program
   .command('init')
-  .description('Generar par RSA y proteger clave privada con AES-128-GCM (PBKDF2)')
+  .description('Generar par RSA y proteger clave privada con AES-128-GCM y PBKDF2')
   .action(async () => {
     const password = await promptHidden('Crea una contraseña: ');
     if (!password) { console.error('La contraseña no puede estar vacía'); process.exit(1); }
@@ -72,7 +72,7 @@ program
 
 program
   .command('encrypt')
-  .description('Cifrar archivos/carpetas (recursivo)')
+  .description('Cifrar archivos y carpetas (recursivo)')
   .option('-i, --input <paths...>', 'Archivos/carpetas a cifrar')
   .action(async (opts) => {
     const inputs = opts.input || [];

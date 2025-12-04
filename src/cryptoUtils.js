@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
-// -------- AES-128-GCM helpers --------
+// AES-128-GCM: Encriptación simétrica
 export function aes128Encrypt(plaintextBuf, keyBuf, nonceBuf = null, aad = null) {
   if (keyBuf.length !== 16) throw new Error('AES-128 key must be 16 bytes');
   const iv = nonceBuf || crypto.randomBytes(12);
@@ -23,7 +23,7 @@ export function aes128Decrypt(nonceBuf, ciphertextBuf, tagBuf, keyBuf, aad = nul
   return dec;
 }
 
-// -------- RSA helpers --------
+// RSA-OAEP: Encriptación asimétrica para intercambio de claves
 export function generateRsaKeypair(bits = 2048) {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
     modulusLength: bits,
@@ -33,7 +33,6 @@ export function generateRsaKeypair(bits = 2048) {
   return { publicKey, privateKey };
 }
 
-// cryptoUtils.js - función rsaPublicEncrypt
 export function rsaPublicEncrypt(publicKeyPem, data) {
   try {
     const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
@@ -51,7 +50,6 @@ export function rsaPublicEncrypt(publicKeyPem, data) {
   }
 }
 
-// cryptoUtils.js - función rsaPrivateDecrypt
 export function rsaPrivateDecrypt(privateKeyPem, encryptedData) {
   try {
     const buffer = Buffer.isBuffer(encryptedData) ? encryptedData : Buffer.from(encryptedData, 'base64');
@@ -68,10 +66,11 @@ export function rsaPrivateDecrypt(privateKeyPem, encryptedData) {
     throw new Error(`Fallo en descifrado RSA: ${error.message}`);
   }
 }
-// -------- Protect private key with AES-128-GCM + PBKDF2 --------
+
+// Protección de clave privada RSA: AES-128-GCM + PBKDF2
 export function protectPrivateKeyWithPassword(privateKeyPem, password, iters = 200_000) {
   const salt = crypto.randomBytes(16);
-  const key = crypto.pbkdf2Sync(Buffer.from(password, 'utf8'), salt, iters, 16, 'sha256'); // 128-bit
+  const key = crypto.pbkdf2Sync(Buffer.from(password, 'utf8'), salt, iters, 16, 'sha256');
   const { nonce, ciphertext, tag } = aes128Encrypt(Buffer.from(privateKeyPem, 'utf8'), key);
   return {
     salt_b64: salt.toString('base64'),
